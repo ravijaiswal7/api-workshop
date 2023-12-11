@@ -1,74 +1,63 @@
 const express = require('express');
 const router = express.Router();
+const Hotel = require('../models/hotel')
+const jwt = require('jsonwebtoken');
 
-const hotels = [
-    {
-        id: 1,
-        name: 'hotel 1',
-        price: 100,
-        city: 'Paris',
-        country: 'France',
-        rating: 4.2,
-        stars: 4
-    },
-    {
-        id: 2,
-        name: 'hotel 2',
-        price: 150,
-        city: 'London',
-        country: 'UK',
-        rating: 4.5,
-        stars: 5
+// middleware
+const jwtVerify = (req, res, next) => {
+    const token = req.headers.authorization;
+    if(token) {
+        const decodedToken = jwt.verify(token, process.env.JWT_SECRET);
+        req.user = decodedToken;
     }
-]
+    next();
+}
+
+// tell express to use jwtVerify middlewware
+router.use(jwtVerify);
 
 // Get all hotels
-router.get("/", (req, res) => {
-    // logger();
-    res.send(hotels);
+router.get("/", async (req, res) => {
+    const hotelsDb = await Hotel.find();
+    res.send(hotelsDb);
 })
 
 // Get one hotels
-router.get("/:id", (req, res) => {
-    // logger();
-    const hotel = hotels.find(hotel => hotel.id === parseInt(req.params.id, 10))
+router.get("/:id", async(req, res) => {
+    const hotel = await Hotel.findById(req.params.id);
     res.send(hotel);
 })
 
 // Create one hotel
-router.post("/", (req, res) => {
-    // logger();
-    const hotel = req.body;
-    console.log({hotel});
-    hotels.push(hotel);
-    res.send(hotel);
+router.post("/", async (req, res) => {
+    if(req.user && req.user.role === "ADMIN") {
+        const hotel = req.body;
+        const createdHotel = await Hotel.create(hotel);
+        res.send(createdHotel);
+    } else {
+        res.status(403).send({ message: "Unauthorized" });
+    }
 })
 
 // Delete one hotel
-router.delete("/:id", (req, res) => {
-    // logger();
-    const hotelIdxToDelete = hotels.findIndex(hotel => hotel.id === parseInt(req.params.id, 10));
-    console.log('Request received to delete a hotel - ');
-    console.log(hotels[hotelIdxToDelete]);
-    hotels.splice(hotelIdxToDelete, 1);
-    res.send(hotels);
+router.delete("/:id", async (req, res) => {
+    if (req.user && req.user.role === "ADMIN") {
+        const response = await Hotel.deleteOne({ _id: req.params.id });
+        res.send(response);
+    } else {
+        res.status(403).send({ message: "Unauthorized" });
+    }
 })
 
 // Update hotel
-router.put("/:id", (req, res) => {
-    // logger();
-    const newHotel = req.body;
-    const updatedHotels = hotels.map((hotel) => {
-        if(hotel.id === parseInt(req.params.id, 10)) {
-           return {
-              ...hotel, 
-              ...newHotel
-            }
-        } else {
-            return hotel;
-        }
-    })
-    res.send(updatedHotels);
+router.put("/:id", async (req, res) => {
+    if (req.user && req.user.role === "ADMIN") {
+        const newHotel = req.body;
+        const response = await Hotel.findOneAndUpdate({ _id: req.params.id }, newHotel);
+        res.send(response);
+    } else {
+        res.status(403).send({ message: "Unauthorized" });
+    }
 })
 
 module.exports = router;
